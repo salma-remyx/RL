@@ -43,6 +43,10 @@ import numpy as np
 import ray
 import torch
 
+from nemo_rl.data.multimodal_utils import (
+    PACKED_MULTIMODAL_FIELDS,
+    PackedTensor,
+)
 from nemo_rl.data_plane.column_io import kv_first_write
 from nemo_rl.data_plane.interfaces import KVBatchMeta
 from nemo_rl.data_plane.schema import ROUTED_EXPERTS_FIELD
@@ -310,9 +314,32 @@ class SyncRolloutActor:
         )
         if ROUTED_EXPERTS_FIELD in flat:
             bulk_batch[ROUTED_EXPERTS_FIELD] = flat[ROUTED_EXPERTS_FIELD]
+        # Multimodal extras. VLM per-token maps (mm_token_type_ids,
+        # token_type_ids) are plain tensors; ship as-is. VLM per-sample
+        # PackedTensor payloads (pixel_values, image_grid_thw, ...) are
+        # converted to ``torch.nested`` for the wire — a native
+        # ``torch.Tensor`` subclass, so every downstream isinstance
+        # filter accepts it and no third wire category exists.
+        # Companion ``<key>__lengths`` ships per-sample sizes so the
+        # read side (BatchedDataDict.get_multimodal_dict) can strip the
+        # padding materialize adds via ``to_padded_tensor``.
         for k, v in flat.get_multimodal_dict(as_tensors=False).items():
-            if isinstance(v, torch.Tensor):
+            if isinstance(v, PackedTensor):
+                # New modality? Register in PACKED_MULTIMODAL_FIELDS
+                # (nemo_rl/data/multimodal_utils.py) so the read side
+                # reassembles it — otherwise silent-drop at trainer forward.
+                assert k in PACKED_MULTIMODAL_FIELDS, (
+                    f"unregistered packed multimodal field {k!r}"
+                )
+                nested, lengths = v.to_nested_wire()
+                if nested is None:
+                    continue  # all-None batch; read side handles absence
+                bulk_batch[k] = nested
+                bulk_batch[PackedTensor.lengths_key(k)] = lengths
+            elif isinstance(v, torch.Tensor):
                 bulk_batch[k] = v
+            else:
+                raise TypeError(f"multimodal field {k!r}: unexpected {type(v).__name__}")
         # ``content`` (raw assistant text per sample) — rides TQ as a
         # NonTensorStack so the driver can fetch it back at jsonl time
         # (kv_first_write wraps it via NonTensorStack).

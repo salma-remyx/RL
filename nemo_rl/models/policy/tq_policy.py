@@ -47,7 +47,23 @@ from nemo_rl.data_plane.schema import (
     LP_SEED_FIELDS,
     fields_with_optional_routed_experts,
 )
+
+from nemo_rl.data.multimodal_utils import (
+    PACKED_MULTIMODAL_FIELDS,
+    PER_TOKEN_MULTIMODAL_FIELDS,
+    PackedTensor,
+)
 from nemo_rl.distributed.batched_data_dict import BatchedDataDict
+
+# Include-list of multimodal fields the logprob dispatch must ship so
+# the trainer's forward matches the rollout. Only ``PACKED`` fields
+# ship a companion ``__lengths`` — per-token fields are rectangular
+# and travel as plain tensors.
+_LP_MULTIMODAL_FIELDS = (
+    PER_TOKEN_MULTIMODAL_FIELDS
+    | PACKED_MULTIMODAL_FIELDS
+    | frozenset(PackedTensor.lengths_key(k) for k in PACKED_MULTIMODAL_FIELDS)
+)
 from nemo_rl.models.policy.lm_policy import Policy
 from nemo_rl.utils.flops_tracker import get_theoretical_tflops
 from nemo_rl.utils.timer import Timer
@@ -289,14 +305,16 @@ class TQPolicy(Policy):
         """
         self._stamp_pad_seqlen(meta)
         spa, dba = self._packing_args("logprob_mb_tokens")
-        lp_meta = replace(
-            meta,
-            fields=fields_with_optional_routed_experts(
-                LP_SEED_FIELDS,
-                enabled=self._router_replay_enabled and include_router_replay,
-            ),
-            task_name=task_name,
+        # Narrow the fetch to LP_SEED_FIELDS + any multimodal fields
+        # the rollout actually wrote (filter is required — noop
+        # adapter and TQ contract both raise on unknown fields) +
+        # optional routed_experts under R3 replay.
+        present_multimodal = _LP_MULTIMODAL_FIELDS & set(meta.fields or ())
+        lp_fields = fields_with_optional_routed_experts(
+            [*LP_SEED_FIELDS, *present_multimodal],
+            enabled=self._router_replay_enabled and include_router_replay,
         )
+        lp_meta = replace(meta, fields=lp_fields, task_name=task_name)
         with timer.time(f"{timer_prefix}/shard_meta") if timer else nullcontext():
             metas, _ = shard_meta_for_dp(
                 lp_meta,

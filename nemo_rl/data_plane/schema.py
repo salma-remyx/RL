@@ -44,7 +44,13 @@ DP_TRAIN_FIELDS = (
     "sample_mask",
 )
 
-# Subset fetched by logprob / ref-logprob workers.
+# Core fields the logprob / ref-logprob workers must have. Kept as a
+# sanity anchor for the runtime assertion in ``TQPolicy._logprob_dispatch``
+# — any of these missing from ``meta.fields`` indicates a broken rollout
+# write path (loud fail rather than a silent shape mismatch downstream).
+#
+# The full logprob-time fetch list adds any VLM multimodal keys that
+# rollout actually wrote — see ``TQPolicy._logprob_dispatch``.
 LP_SEED_FIELDS = (
     "input_ids",
     "input_lengths",

@@ -30,6 +30,7 @@ from transformers import AutoProcessor
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
 from nemo_rl.algorithms import opd as opd_module
+from nemo_rl.algorithms import teacher_token_balancer
 from nemo_rl.algorithms.advantage_estimator import (
     AdvEstimatorConfig,
     GDPOAdvantageEstimator,
@@ -4971,6 +4972,21 @@ def async_grpo_train(
                             "make_sequence_length_divisible_by"
                         ],
                     )
+
+                    # Open-MOPD token-share balancing: reweight per-sample
+                    # loss multipliers so each teacher's share of the
+                    # loss-token budget tracks its configured target share.
+                    token_share_metrics = (
+                        teacher_token_balancer.apply_token_share_balancing(
+                            repeated_batch,
+                            loss_token_counts=flat_messages["token_loss_mask"].sum(
+                                dim=1
+                            ),
+                            master_config=master_config,
+                        )
+                    )
+                    if token_share_metrics:
+                        rollout_metrics.update(token_share_metrics)
 
                     # Create training data. Advantages are added after logprobs.
                     train_data = _build_async_grpo_train_data(

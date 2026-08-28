@@ -131,6 +131,16 @@ on_policy_distillation:
   default_teacher_alias: default_teacher
   strict_agent_name_match: false
   deduplicate_shared_teacher_checkpoints: true
+  # Open-MOPD token-share balancing (async GRPO only). With multiple teachers,
+  # enable to reweight per-sample loss multipliers so each teacher's share of
+  # the loss-token budget matches target_token_shares (uniform when unset).
+  token_share_balancing:
+    enabled: false
+    # target_token_shares:
+    #   teacher_a: 0.5
+    #   teacher_b: 0.5
+    min_weight: 0.25
+    max_weight: 4.0
   non_colocated_teachers:
     enabled: true
     default_teacher_cfg:

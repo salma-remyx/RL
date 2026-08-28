@@ -11,6 +11,9 @@
 
 ## 📣 News
 
+* [08/28/2026] Token-Share Balancing for Multi-Teacher OPD
+    * Opt-in `on_policy_distillation.token_share_balancing` reweights per-sample loss multipliers in async GRPO so each teacher's share of the loss-token optimization budget tracks a configurable target share (uniform by default), addressing capability imbalance across teachers with unequal sequence lengths.
+    * Config block: [mopd-qwen3-1.7b-3n8g-megatron-pack.yaml](/examples/configs/recipes/llm/mopd-qwen3-1.7b-3n8g-megatron-pack.yaml)
 * [08/12/2026] MuseGlimmer RL is supported [on this branch](https://github.com/NVIDIA-NeMo/RL/tree/muse-glimmer-support) with the following [doc](https://github.com/NVIDIA-NeMo/RL/blob/muse-glimmer-support/docs/guides/models/muse-glimmer.md).
 * [08/11/2026] Nemotron-3.5-lightning is released. Trained natively using NeMo RL. Check out [reproducible recipes](https://github.com/NVIDIA-NeMo/RL/tree/main/examples/nemo_gym/nemotron-3.5-lightning).
 * [07/25/2026] [Release v0.7.0!](https://github.com/NVIDIA-NeMo/RL/releases/tag/v0.7.0): PPO, MOPD, Cross-tokenizer, Router-replay, CISPO, model support for Qwen3-Omni, Nemotron Nano v3 Omni, Gemma 4, GLM 5.1 and many more!

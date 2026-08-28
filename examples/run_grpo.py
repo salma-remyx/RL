@@ -25,6 +25,7 @@ from nemo_rl.algorithms.grpo import (
     setup,
     shutdown_environments,
 )
+from nemo_rl.algorithms.teacher_token_balancer import validate_token_share_balance
 from nemo_rl.algorithms.utils import get_tokenizer
 from nemo_rl.data.utils import setup_response_data
 from nemo_rl.data_plane.factory import maybe_configure_data_plane_env
@@ -53,6 +54,16 @@ def _select_trainer(master_config: MasterConfig):
         return grpo_train_sync
     print("🚀 Running synchronous GRPO training (legacy)")
     return grpo_train
+
+
+def _validate_opd_token_share_balance(master_config: MasterConfig) -> None:
+    """Fail fast on OPD token-share balancing misconfiguration before setup.
+
+    Open-MOPD token-share balancing (on_policy_distillation.token_share_balancing)
+    reweights per-sample loss multipliers in async GRPO so each teacher's share
+    of the loss-token budget matches its target share.
+    """
+    validate_token_share_balance(master_config)
 
 
 def parse_args() -> tuple[argparse.Namespace, list[str]]:
@@ -95,6 +106,7 @@ def main() -> None:
         config = OmegaConf.to_container(config, resolve=True)
         config = MasterConfig(**config)
         print("Applied CLI overrides")
+        _validate_opd_token_share_balance(config)
 
     # Print config
     print("Final config:")
